@@ -11,16 +11,50 @@ export class TutorService {
     private readonly ai: AiService,
   ) {}
 
-  async createOrFetchSession(userId: string, topic?: string) {
-    // Reuse most recent active session for same topic
+  async getSessions(userId: string) {
+    return this.prisma.tutorSession.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        _count: { select: { messages: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true, role: true, createdAt: true },
+        },
+      },
+    });
+  }
+
+  async createOrFetchSession(
+    userId: string,
+    topic?: string,
+    mode: string = 'free',
+    level: string = 'A1',
+  ) {
+    // Normalize frontend mode strings to backend modes
+    const modeMap: Record<string, string> = {
+      explain: 'explain',
+      explain_everything: 'explain',
+      'explain everything': 'explain',
+      correct: 'correct',
+      correct_a_lot: 'correct',
+      'correct me a lot': 'correct',
+      free: 'free',
+      chat: 'free',
+      just_chat: 'free',
+      'just chat': 'free',
+    };
+    const normalizedMode = modeMap[mode?.toLowerCase()] ?? 'free';
+    // Reuse most recent active session for same topic + mode
     const existing = await this.prisma.tutorSession.findFirst({
-      where: { userId, topic: topic ?? null, isActive: true },
+      where: { userId, topic: topic ?? null, mode: normalizedMode, isActive: true },
       orderBy: { updatedAt: 'desc' },
     });
     if (existing) return existing;
 
     return this.prisma.tutorSession.create({
-      data: { userId, topic },
+      data: { userId, topic, mode: normalizedMode, level },
     });
   }
 
@@ -72,8 +106,8 @@ export class TutorService {
     const aiReply = await this.ai.chatReply({
       sessionHistory,
       userMessage: text,
-      mode: 'free',
-      level: user?.level ?? 'A1',
+      mode: (session.mode as 'explain' | 'correct' | 'free') ?? 'free',
+      level: session.level ?? user?.level ?? 'A1',
     });
 
     // Persist assistant message

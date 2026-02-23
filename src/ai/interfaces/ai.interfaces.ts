@@ -38,6 +38,8 @@ export interface CheckSentenceResult {
 export interface GeneratePatternDrillsParams {
   topic?: string;
   patternId?: string;
+  pattern?: string;
+  level?: string;
 }
 
 export interface PatternDrill {
@@ -49,7 +51,8 @@ export interface PatternDrill {
 
 // ── chatReply ─────────────────────────────────
 export interface ChatReplyParams {
-  sessionHistory: ChatMessage[];
+  sessionHistory?: ChatMessage[];
+  history?: ChatMessage[];
   userMessage: string;
   mode: 'explain' | 'correct' | 'free';
   level: string;
@@ -85,6 +88,7 @@ export interface GenerateLessonParams {
   inputType: 'text' | 'topic';
   text?: string;
   topic?: string;
+  level?: string;
 }
 
 export interface GeneratedVocabItem {

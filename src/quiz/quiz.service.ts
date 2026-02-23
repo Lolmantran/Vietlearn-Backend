@@ -12,27 +12,40 @@ export class QuizService {
   ) {}
 
   async getDailyQuiz(userId: string) {
+    // Return today's existing quiz if already generated
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const existing = await this.prisma.quizSession.findFirst({
+      where: { userId, createdAt: { gte: startOfDay } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existing) {
+      const questions = (existing.questions as unknown as QuizQuestion[]).map(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        ({ correctOptionId: _, ...q }) => q,
+      );
+      return { quizId: existing.id, questions, cached: true };
+    }
+
+    // Generate a new quiz for today
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const questions = await this.ai.generateQuiz({
       userLevel: user?.level ?? 'A1',
       topics: user?.goals ?? ['general'],
     });
 
-    // Store quiz session without exposing correct answers
     const session = await this.prisma.quizSession.create({
-      data: {
-        userId,
-        questions: questions as object[],
-      },
+      data: { userId, questions: questions as object[] },
     });
 
-    // Strip correct answer before sending to client
     const sanitisedQuestions = questions.map(
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       ({ correctOptionId: _, ...q }) => q,
     );
 
-    return { quizId: session.id, questions: sanitisedQuestions };
+    return { quizId: session.id, questions: sanitisedQuestions, cached: false };
   }
 
   async submitQuiz(userId: string, dto: SubmitQuizDto) {
@@ -45,12 +58,13 @@ export class QuizService {
 
     let correct = 0;
     const detailedFeedback = dto.answers.map((a) => {
+      const selectedId = a.selectedOptionId ?? a.userAnswer ?? '';
       const question = questions.find((q) => q.id === a.questionId);
-      const isCorrect = question?.correctOptionId === a.selectedOptionId;
+      const isCorrect = question?.correctOptionId === selectedId;
       if (isCorrect) correct++;
       return {
         questionId: a.questionId,
-        selectedOptionId: a.selectedOptionId,
+        selectedOptionId: selectedId,
         correctOptionId: question?.correctOptionId ?? null,
         isCorrect,
         explanation: isCorrect
@@ -67,10 +81,10 @@ export class QuizService {
         data: dto.answers.map((a) => ({
           quizSessionId: dto.quizId,
           questionId: a.questionId,
-          selectedId: a.selectedOptionId,
+          selectedId: a.selectedOptionId ?? a.userAnswer ?? '',
           isCorrect:
             (questions.find((q) => q.id === a.questionId)?.correctOptionId ===
-              a.selectedOptionId) === true,
+              (a.selectedOptionId ?? a.userAnswer ?? '')) === true,
         })),
       }),
       this.prisma.quizSession.update({

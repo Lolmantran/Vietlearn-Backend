@@ -22,6 +22,7 @@ export class ContentService {
       inputType: dto.inputType,
       text: dto.text,
       topic: dto.topic,
+      level: dto.level,
     });
 
     // Persist generated lesson

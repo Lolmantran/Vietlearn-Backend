@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import OpenAI from 'openai';
 import {
   ChatReplyParams,
   ChatReplyResult,
@@ -18,169 +19,119 @@ import {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+  private readonly openai: OpenAI;
+  private readonly model: string;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    this.openai = new OpenAI({
+      apiKey: this.config.get<string>('ai.openaiApiKey'),
+    });
+    this.model = this.config.get<string>('ai.model') ?? 'gpt-4o-mini';
+  }
 
-  // ─────────────────────────────────────────────
-  // TODO: Replace stub bodies with real OpenAI calls
-  // e.g. await this.openai.chat.completions.create(...)
-  // ─────────────────────────────────────────────
+  // ─── PRIVATE HELPER ───────────────────────────────────────────────────────
+
+  private async jsonCompletion<T>(systemPrompt: string, userPrompt: string): Promise<T> {
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.7,
+    });
+    const content = response.choices[0]?.message?.content ?? '{}';
+    return JSON.parse(content) as T;
+  }
+
+  // ─── PUBLIC METHODS ───────────────────────────────────────────────────────
 
   async generateFlashcardsFromText(
     params: GenerateFlashcardsParams,
   ): Promise<GeneratedFlashcard[]> {
-    this.logger.debug(
-      `generateFlashcardsFromText – text length ${params.text.length}`,
+    this.logger.debug(`generateFlashcardsFromText – text length ${params.text.length}`);
+
+    const result = await this.jsonCompletion<{ flashcards: GeneratedFlashcard[] }>(
+      `You are a Vietnamese language teacher. Extract vocabulary from the provided text and return a JSON object with a "flashcards" array. Each item must have: word (string), pronunciation (string - phonetic guide for English speakers), meaning (string - English translation), exampleSentence (string - a Vietnamese sentence using the word).`,
+      `Extract the most important Vietnamese vocabulary from this text:\n\n${params.text}`,
     );
 
-    // TODO: call OpenAI: prompt = "Extract Vietnamese vocab from: {text}. Return JSON array."
-    return [
-      {
-        word: 'xin chào',
-        pronunciation: 'sin chow',
-        meaning: 'hello',
-        exampleSentence: 'Xin chào, bạn có khỏe không?',
-      },
-      {
-        word: 'cảm ơn',
-        pronunciation: 'gam uhn',
-        meaning: 'thank you',
-        exampleSentence: 'Cảm ơn bạn rất nhiều.',
-      },
-    ];
+    return result.flashcards ?? [];
   }
 
-  async checkSentence(
-    params: CheckSentenceParams,
-  ): Promise<CheckSentenceResult> {
-    this.logger.debug(
-      `checkSentence – level=${params.level} sentence="${params.userSentence}"`,
-    );
+  async checkSentence(params: CheckSentenceParams): Promise<CheckSentenceResult> {
+    this.logger.debug(`checkSentence – level=${params.level} sentence="${params.userSentence}"`);
 
-    // TODO: call OpenAI: prompt = "Grade this Vietnamese sentence: '{userSentence}'. Return JSON."
-    const isCorrect = params.userSentence.trim().length > 5;
-    return {
-      isCorrect,
-      correctedSentence: isCorrect
-        ? params.userSentence
-        : 'Tôi muốn học tiếng Việt.',
-      grammarExplanation: isCorrect
-        ? 'Your sentence is grammatically correct.'
-        : 'The sentence is missing a subject or verb.',
-      score: isCorrect ? 90 : 40,
-    };
+    return this.jsonCompletion<CheckSentenceResult>(
+      `You are a Vietnamese language tutor. Evaluate the user's Vietnamese sentence and return a JSON object with: isCorrect (boolean), correctedSentence (string), grammarExplanation (string - brief explanation in English), score (number 0-100).`,
+      `User level: ${params.level}. Evaluate this Vietnamese sentence: "${params.userSentence}"`,
+    );
   }
 
-  async generatePatternDrills(
-    params: GeneratePatternDrillsParams,
-  ): Promise<PatternDrill[]> {
-    this.logger.debug(
-      `generatePatternDrills – topic=${params.topic ?? 'general'}`,
+  async generatePatternDrills(params: GeneratePatternDrillsParams): Promise<PatternDrill[]> {
+    this.logger.debug(`generatePatternDrills – topic=${params.topic ?? 'general'}`);
+
+    const result = await this.jsonCompletion<{ drills: PatternDrill[] }>(
+      `You are a Vietnamese language teacher. Generate pattern drills and return a JSON object with a "drills" array. Each drill must have: type ("shuffle" | "cloze" | "translate"), prompt (string), answer (string), and optionally hint (string).`,
+      `Generate 5 Vietnamese pattern drills for level ${params.level ?? 'A1'}, topic: "${params.topic ?? 'general conversation'}", pattern: "${params.pattern ?? 'basic sentences'}".`,
     );
 
-    // TODO: call OpenAI to generate pattern exercises
-    return [
-      {
-        type: 'shuffle',
-        prompt: 'Arrange: [học / tôi / muốn / tiếng Việt]',
-        answer: 'Tôi muốn học tiếng Việt.',
-      },
-      {
-        type: 'cloze',
-        prompt: 'Tôi ___ ăn phở. (want)',
-        answer: 'muốn',
-        hint: 'desire verb',
-      },
-      {
-        type: 'translate',
-        prompt: 'Translate: "Where is the market?"',
-        answer: 'Chợ ở đâu?',
-      },
-    ];
+    return result.drills ?? [];
   }
 
   async chatReply(params: ChatReplyParams): Promise<ChatReplyResult> {
-    const { userMessage, mode, level } = params;
-    this.logger.debug(
-      `chatReply – mode=${mode} level=${level} msg="${userMessage}"`,
-    );
+    const { userMessage, history, sessionHistory, mode, level } = params;
+    const chatHistory = history ?? sessionHistory ?? [];
+    this.logger.debug(`chatReply – mode=${mode} level=${level} msg="${userMessage}"`);
 
-    // TODO: Build system prompt from mode + level, call OpenAI with session history
-    const responses: Record<string, ChatReplyResult> = {
-      explain: {
-        text: `Great question! In Vietnamese (level ${level}), "${userMessage}" means... [AI explanation stub]`,
-        suggestions: ['Try using this in a sentence.', 'Listen to the audio.'],
-      },
-      correct: {
-        text: `Your sentence is almost correct! Here's a suggestion: "${userMessage}" → [corrected stub]`,
-        corrections: ['Check tone marks on vowels.'],
-      },
-      free: {
-        text: `Interesting! Let's continue talking about "${userMessage}". [AI free chat stub]`,
-      },
+    const systemPrompts: Record<string, string> = {
+      explain: `You are a Vietnamese language tutor who explains everything in depth. The student is at level ${level}. For every message, explain the Vietnamese words, grammar structures, and cultural context. Break down sentences word by word when helpful. Be thorough and educational. Return JSON: { text: string, suggestions: string[] }`,
+      correct: `You are a strict Vietnamese language teacher. The student is at level ${level}. Interrupt and correct every grammar mistake, tone error, and vocabulary choice. Be direct and precise. Always show the corrected version. Return JSON: { text: string, corrections: string[] }`,
+      free: `You are a friendly Vietnamese conversation partner. The student is at level ${level}. Have casual, natural conversation. Only gently mention major errors without breaking the flow. Keep responses concise and conversational. Return JSON: { text: string }`,
     };
 
-    return responses[mode] ?? responses['free'];
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompts[mode] ?? systemPrompts['free'] },
+      ...chatHistory.map((m) => ({
+        role: m.role.toLowerCase() as 'user' | 'assistant',
+        content: m.content,
+      })),
+      { role: 'user', content: userMessage },
+    ];
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      response_format: { type: 'json_object' },
+      messages,
+      temperature: 0.8,
+    });
+
+    const content = response.choices[0]?.message?.content ?? '{"text":"Sorry, I could not generate a response."}';
+    return JSON.parse(content) as ChatReplyResult;
   }
 
   async generateQuiz(params: GenerateQuizParams): Promise<QuizQuestion[]> {
-    this.logger.debug(
-      `generateQuiz – level=${params.userLevel} topics=${params.topics.join(',')}`,
+    this.logger.debug(`generateQuiz – level=${params.userLevel} topics=${params.topics.join(',')}`);
+
+    const result = await this.jsonCompletion<{ questions: QuizQuestion[] }>(
+      `You are a Vietnamese language quiz generator for English-speaking learners. Return a JSON object with a "questions" array. Each question must have: id (string), type ("multiple_choice"), prompt (string - ALWAYS written in English, e.g. "What does 'xin chào' mean?"), options (array of {id: string, text: string} with 4 options using ids "a","b","c","d"), correctOptionId (string matching one option id). The answer options can contain Vietnamese words when appropriate.`,
+      `Generate 5 multiple-choice Vietnamese language quiz questions for level ${params.userLevel}, covering topics: ${params.topics.join(', ')}.`,
     );
 
-    // TODO: call OpenAI to generate quiz questions
-    return [
-      {
-        id: 'q1',
-        type: 'multiple_choice',
-        prompt: 'What does "xin chào" mean?',
-        options: [
-          { id: 'a', text: 'Goodbye' },
-          { id: 'b', text: 'Hello' },
-          { id: 'c', text: 'Thank you' },
-          { id: 'd', text: 'Sorry' },
-        ],
-        correctOptionId: 'b',
-      },
-      {
-        id: 'q2',
-        type: 'multiple_choice',
-        prompt: 'How do you say "thank you" in Vietnamese?',
-        options: [
-          { id: 'a', text: 'xin chào' },
-          { id: 'b', text: 'xin lỗi' },
-          { id: 'c', text: 'cảm ơn' },
-          { id: 'd', text: 'tạm biệt' },
-        ],
-        correctOptionId: 'c',
-      },
-    ];
+    return result.questions ?? [];
   }
 
-  async generateLessonFromContent(
-    params: GenerateLessonParams,
-  ): Promise<GeneratedLesson> {
-    this.logger.debug(
-      `generateLessonFromContent – type=${params.inputType} topic=${params.topic ?? ''}`,
-    );
+  async generateLessonFromContent(params: GenerateLessonParams): Promise<GeneratedLesson> {
+    this.logger.debug(`generateLessonFromContent – type=${params.inputType} topic=${params.topic ?? ''}`);
 
-    // TODO: call OpenAI: "Generate a Vietnamese lesson for topic: {topic}. Return JSON."
-    return {
-      vocab: [
-        { word: 'phở', pronunciation: 'fuh', meaning: 'Vietnamese noodle soup' },
-        { word: 'bánh mì', pronunciation: 'bahn mee', meaning: 'Vietnamese baguette sandwich' },
-      ],
-      examples: [
-        'Tôi muốn ăn một tô phở.',
-        'Bánh mì này rất ngon.',
-      ],
-      exercises: [
-        {
-          type: 'translate',
-          prompt: 'Translate: "I want to eat pho"',
-          answer: 'Tôi muốn ăn phở.',
-        },
-      ],
-    };
+    const prompt = params.inputType === 'text'
+      ? `Create a Vietnamese lesson for level ${params.level ?? 'beginner'} from this text:\n\n${params.text}`
+      : `Create a Vietnamese lesson for level ${params.level ?? 'beginner'} about the topic: "${params.topic}".`;
+
+    return this.jsonCompletion<GeneratedLesson>(
+      `You are a Vietnamese language curriculum designer. Return a JSON object with: vocab (array of {word, pronunciation, meaning}), examples (array of Vietnamese example strings), exercises (array of {type: "translate"|"cloze"|"shuffle", prompt, answer}).`,
+      prompt,
+    );
   }
 }

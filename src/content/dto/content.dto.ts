@@ -11,4 +11,8 @@ export class GenerateContentDto {
   @IsOptional()
   @IsString()
   topic?: string;
+
+  @IsOptional()
+  @IsString()
+  level?: string;
 }

@@ -109,6 +109,8 @@ model TutorSession {
   id        String   @id @default(cuid())
   userId    String
   topic     String?
+  mode      String   @default("free")  // explain | correct | free
+  level     String   @default("A1")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

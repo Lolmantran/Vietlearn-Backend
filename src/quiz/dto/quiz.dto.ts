@@ -1,12 +1,18 @@
-import { IsArray, IsString, ValidateNested, ArrayMinSize } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class QuizAnswerDto {
   @IsString()
   questionId: string;
 
+  // Accept either field name — frontend may send userAnswer or selectedOptionId
+  @IsOptional()
   @IsString()
-  selectedOptionId: string;
+  selectedOptionId?: string;
+
+  @IsOptional()
+  @IsString()
+  userAnswer?: string;
 }
 
 export class SubmitQuizDto {
