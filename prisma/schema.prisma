@@ -1,4 +1,4 @@
-// MandarinMind - Chinese Learning Platform Database Schema
+// ViLearn � AI-powered Vietnamese learning platform
 
 generator client {
   provider = "prisma-client-js"
@@ -9,23 +9,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== USER & AUTHENTICATION ====================
+// ---------------------------------------------
+// USERS
+// ---------------------------------------------
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  username      String   @unique
-  passwordHash  String
-  role          Role     @default(USER)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(USER)
+  level        String?  // A1, A2, B1, B2, C1, C2
+  goals        String[] // e.g. ["travel", "business"]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  // Relations
-  userProgress  UserProgress?
-  reviews       Review[]
-  failedWords   FailedWord[]
-  achievements  UserAchievement[]
-  streaks       Streak[]
+  flashcardReviews FlashcardReview[]
+  tutorSessions    TutorSession[]
+  quizSessions     QuizSession[]
+  stats            UserStats?
+  customDecks      Deck[]
 
   @@map("users")
 }
@@ -35,214 +38,171 @@ enum Role {
   ADMIN
 }
 
-// ==================== VOCABULARY ====================
+// ---------------------------------------------
+// VOCAB / DECKS / FLASHCARDS
+// ---------------------------------------------
 
-model Vocabulary {
-  id              String   @id @default(cuid())
-  chinese         String   @unique
-  pinyin          String
-  pinyinTone      String   // Pinyin with tone marks (e.g., "nǐ hǎo")
-  englishMeaning  String
-  synonyms        String[]
-  relatedWords    String[]
-  audioUrl        String?
-  hskLevel        Int?     // HSK 1-9
-  difficulty      Difficulty @default(BEGINNER)
-  usageFrequency  Int      @default(0)
-  exampleSentences ExampleSentence[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  reviews         Review[]
-  failedWords     FailedWord[]
-  lessonWords     LessonWord[]
-
-  @@map("vocabulary")
-}
-
-enum Difficulty {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
-
-model ExampleSentence {
-  id            String   @id @default(cuid())
-  vocabularyId  String
-  chinese       String
-  pinyin        String
-  english       String
-  audioUrl      String?
-  createdAt     DateTime @default(now())
-
-  vocabulary    Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
-
-  @@map("example_sentences")
-}
-
-// ==================== LESSONS & PACKS ====================
-
-model Lesson {
-  id          String   @id @default(cuid())
-  title       String
+model Deck {
+  id          String    @id @default(cuid())
+  name        String
+  deckType    DeckType  @default(CUSTOM)
   description String?
-  packId      String
-  orderIndex  Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ownerId     String?   // null = system deck
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  pack        WordPack @relation(fields: [packId], references: [id], onDelete: Cascade)
-  words       LessonWord[]
+  owner       User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  flashcards  Flashcard[]
 
-  @@map("lessons")
+  @@map("decks")
 }
 
-model WordPack {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  category    PackCategory
-  hskLevel    Int?
-  orderIndex  Int
-  isLocked    Boolean  @default(false)
-  unlockLevel Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  lessons     Lesson[]
-
-  @@map("word_packs")
-}
-
-enum PackCategory {
-  HSK
-  DAILY_CONVERSATION
+enum DeckType {
+  CORE
   TRAVEL
-  FOOD_CULTURE
-  SLANG
   BUSINESS
   CUSTOM
 }
 
-model LessonWord {
-  id           String   @id @default(cuid())
-  lessonId     String
-  vocabularyId String
-  orderIndex   Int
-
-  lesson       Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  vocabulary   Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, vocabularyId])
-  @@map("lesson_words")
-}
-
-// ==================== SRS & REVIEWS ====================
-
-model Review {
+model Flashcard {
   id              String   @id @default(cuid())
-  userId          String
-  vocabularyId    String
-  srsStage        Int      @default(0) // 0 → 1 → 2 → 3 → 4 → 5 (burned)
-  correctCount    Int      @default(0)
-  incorrectCount  Int      @default(0)
-  lastReviewedAt  DateTime @default(now())
-  nextReviewAt    DateTime
-  intervalDays    Int      @default(1)
-  easeFactor      Float    @default(2.5)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vocabulary      Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, vocabularyId])
-  @@map("reviews")
-}
-
-model FailedWord {
-  id              String   @id @default(cuid())
-  userId          String
-  vocabularyId    String
-  attemptCount    Int      @default(1)
-  lastFailedAt    DateTime @default(now())
+  deckId          String
+  word            String   // Vietnamese word
+  pronunciation   String?  // phonetic / tones
+  meaning         String   // English meaning
+  exampleSentence String?
+  audioUrl        String?
   createdAt       DateTime @default(now())
 
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vocabulary      Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  deck    Deck              @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  reviews FlashcardReview[]
 
-  @@unique([userId, vocabularyId])
-  @@map("failed_words")
+  @@map("flashcards")
 }
 
-// ==================== USER PROGRESS ====================
-
-model UserProgress {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  level           Int      @default(1)
-  xp              Int      @default(0)
-  totalWords      Int      @default(0)
-  masteredWords   Int      @default(0)
-  currentStreak   Int      @default(0)
-  longestStreak   Int      @default(0)
-  lastActivityAt  DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("user_progress")
-}
-
-model Streak {
-  id          String   @id @default(cuid())
-  userId      String
-  date        DateTime @db.Date
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-  @@map("streaks")
-}
-
-// ==================== ACHIEVEMENTS ====================
-
-model Achievement {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String
-  iconUrl     String?
-  category    AchievementCategory
-  requirement Int      // e.g., 20 words, 7 days
-  createdAt   DateTime @default(now())
-
-  userAchievements UserAchievement[]
-
-  @@map("achievements")
-}
-
-enum AchievementCategory {
-  WORDS_LEARNED
-  STREAK
-  MASTERED_WORDS
-  PERFECT_QUIZ
-  HSK_COMPLETION
-  SPECIAL
-}
-
-model UserAchievement {
+// SRS per-user per-card state
+model FlashcardReview {
   id            String   @id @default(cuid())
   userId        String
-  achievementId String
-  unlockedAt    DateTime @default(now())
+  flashcardId   String
+  interval      Int      @default(1)   // days until next review
+  easeFactor    Float    @default(2.5)
+  repetitions   Int      @default(0)
+  nextReviewAt  DateTime @default(now())
+  lastRating    String?  // again | hard | good | easy
+  reviewedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, achievementId])
-  @@map("user_achievements")
+  @@unique([userId, flashcardId])
+  @@map("flashcard_reviews")
+}
+
+// ---------------------------------------------
+// AI TUTOR
+// ---------------------------------------------
+
+model TutorSession {
+  id        String   @id @default(cuid())
+  userId    String
+  topic     String?
+  mode      String   @default("free")  // explain | correct | free
+  level     String   @default("A1")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages TutorMessage[]
+
+  @@map("tutor_sessions")
+}
+
+model TutorMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      MessageRole // USER | ASSISTANT
+  content   String
+  metadata  Json?       // corrections, suggestions
+  createdAt DateTime    @default(now())
+
+  session TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("tutor_messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+// ---------------------------------------------
+// QUIZ
+// ---------------------------------------------
+
+model QuizSession {
+  id         String          @id @default(cuid())
+  userId     String
+  questions  Json            // QuizQuestion[]
+  isComplete Boolean         @default(false)
+  score      Int?
+  feedback   Json?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@map("quiz_sessions")
+}
+
+model QuizAnswer {
+  id            String   @id @default(cuid())
+  quizSessionId String
+  questionId    String
+  selectedId    String
+  isCorrect     Boolean
+  createdAt     DateTime @default(now())
+
+  quizSession QuizSession @relation(fields: [quizSessionId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_answers")
+}
+
+// ---------------------------------------------
+// CONTENT LESSONS
+// ---------------------------------------------
+
+model ContentLesson {
+  id        String   @id @default(cuid())
+  inputType String   // "text" | "topic"
+  source    String?
+  vocab     Json     // GeneratedVocabItem[]
+  examples  Json     // string[]
+  exercises Json     // Exercise[]
+  createdAt DateTime @default(now())
+
+  @@map("content_lessons")
+}
+
+// ---------------------------------------------
+// STATS
+// ---------------------------------------------
+
+model UserStats {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  totalWords     Int      @default(0)
+  totalReviews   Int      @default(0)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActivityAt DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stats")
 }
