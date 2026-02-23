@@ -14,15 +14,22 @@ datasource db {
 // ---------------------------------------------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String
-  role         Role     @default(USER)
-  level        String?  // A1, A2, B1, B2, C1, C2
-  goals        String[] // e.g. ["travel", "business"]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String
+  passwordHash      String
+  role              Role      @default(USER)
+  level             String?   // A1, A2, B1, B2, C1, C2
+  goals             String[]  // e.g. ["travel", "business"]
+  // XP & streak fields
+  xpTotal           Int       @default(0)
+  xpToday           Int       @default(0)
+  xpTodayDate       DateTime?
+  currentStreak     Int       @default(0)
+  longestStreak     Int       @default(0)
+  lastActivityDate  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   flashcardReviews FlashcardReview[]
   tutorSessions    TutorSession[]

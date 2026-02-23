@@ -13,6 +13,7 @@ import { TutorModule } from './tutor/tutor.module';
 import { QuizModule } from './quiz/quiz.module';
 import { ContentModule } from './content/content.module';
 import { StatsModule } from './stats/stats.module';
+import { XpModule } from './xp/xp.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { StatsModule } from './stats/stats.module';
     QuizModule,
     ContentModule,
     StatsModule,
+    XpModule,
   ],
 })
 export class AppModule {}

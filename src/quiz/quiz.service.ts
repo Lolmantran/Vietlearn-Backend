@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
+import { XpService } from '../xp/xp.service';
 import { SubmitQuizDto } from './dto/quiz.dto';
 import { QuizQuestion } from '../ai/interfaces/ai.interfaces';
+
+const XP_PER_CORRECT = 10;
 
 @Injectable()
 export class QuizService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly xp: XpService,
   ) {}
 
   async getDailyQuiz(userId: string) {
@@ -55,25 +59,36 @@ export class QuizService {
     if (!session) throw new NotFoundException('Quiz not found or already completed');
 
     const questions = session.questions as unknown as QuizQuestion[];
+    const totalQuestions = questions.length;
 
     let correct = 0;
     const detailedFeedback = dto.answers.map((a) => {
       const selectedId = a.selectedOptionId ?? a.userAnswer ?? '';
       const question = questions.find((q) => q.id === a.questionId);
-      const isCorrect = question?.correctOptionId === selectedId;
+      const isCorrect = !!question && question.correctOptionId === selectedId;
       if (isCorrect) correct++;
       return {
         questionId: a.questionId,
+        isCorrect,
         selectedOptionId: selectedId,
         correctOptionId: question?.correctOptionId ?? null,
-        isCorrect,
         explanation: isCorrect
           ? 'Correct!'
           : `The correct answer was "${question?.options.find((o) => o.id === question.correctOptionId)?.text ?? '?'}"`,
       };
     });
 
-    const score = Math.round((correct / questions.length) * 100);
+    const totalPoints = totalQuestions * XP_PER_CORRECT;
+    const percentage = totalQuestions > 0
+      ? Math.round((correct / totalQuestions) * 100)
+      : 0;
+
+    // Award XP
+    const xpEarned = await this.xp.addXp(
+      userId,
+      correct * XP_PER_CORRECT,
+      'quiz_correct_answers',
+    );
 
     // Persist answers & mark complete
     await this.prisma.$transaction([
@@ -83,16 +98,28 @@ export class QuizService {
           questionId: a.questionId,
           selectedId: a.selectedOptionId ?? a.userAnswer ?? '',
           isCorrect:
-            (questions.find((q) => q.id === a.questionId)?.correctOptionId ===
-              (a.selectedOptionId ?? a.userAnswer ?? '')) === true,
+            !!questions.find((q) => q.id === a.questionId) &&
+            questions.find((q) => q.id === a.questionId)!.correctOptionId ===
+              (a.selectedOptionId ?? a.userAnswer ?? ''),
         })),
       }),
       this.prisma.quizSession.update({
         where: { id: dto.quizId },
-        data: { isComplete: true, score, feedback: detailedFeedback as object[] },
+        data: {
+          isComplete: true,
+          score: correct,
+          feedback: detailedFeedback as object[],
+        },
       }),
     ]);
 
-    return { score, detailedFeedback };
+    return {
+      score: correct,
+      totalPoints,
+      percentage,
+      xpEarned,
+      timeSpentSeconds: 0,
+      detailedFeedback,
+    };
   }
 }
