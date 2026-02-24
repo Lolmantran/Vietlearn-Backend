@@ -1,6 +1,6 @@
-# 🇻🇳 MandarinMind Backend
+# 🇻🇳 Vietlearn Backend
 
-REST + WebSocket API for **MandarinMind** — an AI-powered Vietnamese language learning platform. Built with **NestJS 11**, **Prisma 6**, **PostgreSQL** (Supabase), and **OpenAI GPT-4o-mini**.
+REST + WebSocket API for **Vietlearn** — an AI-powered Vietnamese language learning platform. Built with **NestJS 11**, **Prisma 6**, **PostgreSQL** (Supabase), and **OpenAI GPT-4o-mini**.
 
 ---
 
