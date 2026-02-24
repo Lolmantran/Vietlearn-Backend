@@ -37,9 +37,9 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  console.log(`🚀 ViLearn API running at http://localhost:${port}/api`);
-  console.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 ViLearn API running on port ${port}`);
+  console.log(`📚 Swagger docs at /api/docs`);
 }
 bootstrap();
 
