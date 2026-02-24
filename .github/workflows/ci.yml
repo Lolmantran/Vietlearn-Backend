@@ -36,6 +36,8 @@ jobs:
 
       - name: Build (NestJS compile)
         run: npm run build
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
       - name: Lint
         run: npx eslint "{src,test}/**/*.ts" --max-warnings=0
