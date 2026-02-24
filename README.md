@@ -1,8 +1,216 @@
-# 📘 MandarinMind Backend
+# 🇻🇳 MandarinMind Backend
 
-A full-featured Chinese learning platform backend built with **NestJS**, **Prisma**, and **PostgreSQL**.
+REST + WebSocket API for **MandarinMind** — an AI-powered Vietnamese language learning platform. Built with **NestJS 11**, **Prisma 6**, **PostgreSQL** (Supabase), and **OpenAI GPT-4o-mini**.
 
-## 🎯 Features
+---
+
+## ✨ Features
+
+### 🔐 Authentication
+- Email/password registration & login with **Argon2** password hashing
+- **Google OAuth** login (ID token verification via `google-auth-library`)
+- **JWT** access tokens (Bearer) used across all protected endpoints
+- `PATCH /me` — update level, learning goals, daily study goal
+
+### 📚 Vocabulary & Flashcards
+- 90 seeded Vietnamese flashcards across 4 curated decks (Core, Travel, Food & Dining, Business)
+- Each card includes: word, pronunciation, meaning, example sentence, `partOfSpeech` (noun/verb/adjective/etc.)
+- **AI-generated custom decks** — paste any text and GPT-4o-mini extracts vocabulary with POS tagging
+- Per-deck enrollment and spaced-repetition review queue
+- `GET /vocab/progress` — mastery % per deck (threshold: 21-day SRS interval)
+
+### 🧠 Spaced Repetition System (SRS)
+- SM-2 algorithm: interval, ease factor, repetition count per card
+- Review ratings: `again / hard / good / easy` adjust next review date
+- Due-today queue via `GET /vocab/review-queue`
+
+### 🤖 AI Tutor (WebSocket + REST)
+- Real-time chat powered by **Socket.io** + GPT-4o-mini
+- Persistent session history (oldest-first ordering)
+- Tutor adapts to user's current level (A1–C2)
+- REST fallback: `POST /tutor/session/:id/message`
+
+### 📝 Quiz
+- AI-generated daily quizzes (multiple choice, fill-in-the-blank, translation)
+- Randomised per session to avoid repeated questions
+- Score submission with XP reward
+
+### ✍️ Sentence Practice
+- `POST /sentences/check` — AI grades a user-written Vietnamese sentence
+- `POST /sentences/pattern-drill` — generates drill exercises for a grammar pattern
+
+### 🏆 XP & Gamification
+- XP awarded for every activity (quiz, vocab review, sentence check, tutor message)
+- Daily XP reset with streak tracking (`currentStreak`, `longestStreak`)
+- Study time tracking: `minutesStudiedToday` resets at midnight UTC
+
+### 📊 Stats & Progress
+- `GET /stats/overview` — real-time daily minutes, 7-day weekly activity bar chart, quiz performance
+- `GET /stats/by-topic` — accuracy breakdown per learning goal
+- Weekly activity uses `minutesStudiedToday` for today's bar (authoritative source)
+
+### 🎓 Onboarding
+- Placement test submission sets skill level
+- Goal selection (Travel, Business, Conversation, Exam, Culture, Heritage)
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | NestJS 11 (TypeScript) |
+| ORM | Prisma 6 |
+| Database | PostgreSQL via Supabase |
+| Auth | JWT + Argon2 + Google OAuth |
+| AI | OpenAI GPT-4o-mini |
+| Real-time | Socket.io (WebSockets) |
+| Validation | class-validator + class-transformer |
+| API Docs | Swagger (`/api/docs`) |
+| CI | GitHub Actions |
+
+---
+
+## 🗃️ Database Schema (key models)
+
+```
+User            — accounts, XP, streak, study time, daily goal
+UserStats       — aggregate totals (reviews, words learned)
+Deck            — vocabulary collections (CORE / TRAVEL / BUSINESS / CUSTOM)
+Flashcard       — word, pronunciation, meaning, partOfSpeech, exampleSentence
+FlashcardReview — SRS state per user per card (interval, easeFactor, nextReviewAt)
+QuizSession     — quiz attempts + answers
+TutorSession    — AI chat sessions
+TutorMessage    — individual messages (USER | ASSISTANT role)
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 20+
+- PostgreSQL database (or a free [Supabase](https://supabase.com) project)
+
+### Setup
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Fill in DATABASE_URL, JWT_SECRET, OPENAI_API_KEY
+# Optional: GOOGLE_CLIENT_ID for Google OAuth
+
+# 3. Run database migrations
+npx prisma migrate deploy
+
+# 4. Generate Prisma client
+npx prisma generate
+
+# 5. Seed 90 Vietnamese flashcards
+npx ts-node prisma/seed.ts
+
+# 6. Start development server
+npm run start:dev
+```
+
+API available at `http://localhost:3000/api`  
+Swagger docs at `http://localhost:3000/api/docs`
+
+### Environment Variables
+
+```env
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+JWT_SECRET=your-jwt-secret
+OPENAI_API_KEY=sk-...
+```
+
+---
+
+## 📡 API Reference
+
+### Auth
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | — | Create account |
+| POST | `/api/auth/login` | — | Email/password login |
+| POST | `/api/auth/google` | — | Google ID token login |
+| POST | `/api/auth/logout` | Bearer | Invalidate session |
+| GET | `/api/me` | Bearer | Get current user |
+| PATCH | `/api/me` | Bearer | Update level / goals / dailyGoal |
+
+### Vocabulary
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/vocab/decks` | Bearer | List all decks |
+| GET | `/api/vocab/progress` | Bearer | Mastery % per enrolled deck |
+| POST | `/api/vocab/deck/:id/enroll` | Bearer | Enroll in a deck |
+| GET | `/api/vocab/review-queue` | Bearer | Cards due for review today |
+| POST | `/api/vocab/review` | Bearer | Submit SRS rating |
+| POST | `/api/vocab/generate-custom-deck` | Bearer | AI-generate deck from text |
+
+### Tutor (WebSocket)
+```
+ws://localhost:3000  event: user_message  → { sessionId, content }
+                     event: ai_response   ← { content, sessionId }
+```
+
+### Stats
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/stats/overview` | Bearer | XP, streaks, weekly activity |
+| GET | `/api/stats/by-topic` | Bearer | Per-goal accuracy |
+
+---
+
+## 🏗️ Project Structure
+
+```
+src/
+├── auth/           # JWT, Google OAuth, register/login
+├── vocab/          # Decks, flashcards, SRS review
+├── quiz/           # AI quiz generation & submission
+├── tutor/          # AI chat (WebSocket + REST)
+├── sentences/      # AI sentence checking & drills
+├── stats/          # Progress overview & analytics
+├── onboarding/     # Placement test & goal setup
+├── xp/             # XP + study time tracking
+├── srs/            # SM-2 spaced repetition algorithm
+├── ai/             # OpenAI service wrapper
+├── prisma/         # Prisma service
+├── common/         # Guards, decorators, interceptors
+└── main.ts
+prisma/
+├── schema.prisma   # Database schema (7 migrations applied)
+├── seed.ts         # 90 Vietnamese flashcards with partOfSpeech
+└── migrations/
+.github/
+└── workflows/
+    └── ci.yml      # Build + typecheck on every push
+```
+
+---
+
+## 🧪 CI / CD
+
+GitHub Actions runs on every push and PR:
+
+```
+✅ npm ci
+✅ prisma generate
+✅ tsc --noEmit  (zero TypeScript errors)
+✅ nest build
+⚠️  eslint (warnings only)
+```
+
+---
+
+## 📝 License
+
+MIT
+
 
 - 🔐 JWT Authentication
 - 📚 Vocabulary management with HSK levels
@@ -115,80 +323,3 @@ npm run test:e2e
 npm run test:cov
 ```
 
-## 📦 API Endpoints (To be implemented)
-
-```
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/vocabulary
-GET    /api/vocabulary/:id
-POST   /api/reviews
-GET    /api/progress
-GET    /api/achievements
-POST   /api/quiz/submit
-```
-
-## 🛠️ Tech Stack
-
-- **NestJS** - Progressive Node.js framework
-- **Prisma** - Next-generation ORM
-- **PostgreSQL** - Relational database
-- **JWT** - Authentication
-- **TypeScript** - Type-safe development
-
-## 📝 License
-
-MIT
-
----
-
-Built with ❤️ for Chinese language learners
-
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
