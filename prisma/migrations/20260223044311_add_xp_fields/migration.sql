@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN     "currentStreak" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "lastActivityDate" TIMESTAMP(3),
+ADD COLUMN     "longestStreak" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "xpToday" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "xpTodayDate" TIMESTAMP(3),
+ADD COLUMN     "xpTotal" INTEGER NOT NULL DEFAULT 0;

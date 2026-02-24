@@ -17,6 +17,7 @@ export interface GeneratedFlashcard {
   word: string;
   pronunciation: string;
   meaning: string;
+  partOfSpeech?: string; // noun | verb | adjective | adverb | pronoun | phrase | expression | interjection
   exampleSentence: string;
 }
 
@@ -68,6 +69,7 @@ export interface ChatReplyResult {
 export interface GenerateQuizParams {
   userLevel: string;
   topics: string[];
+  seed?: number; // random number added to prompt to prevent repeated questions
 }
 
 export interface QuizOption {

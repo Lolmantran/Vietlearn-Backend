@@ -9,6 +9,11 @@ export class GenerateCustomDeckDto {
   @IsString()
   sourceText?: string;
 
+  /** Alias for sourceText — accepted from the frontend as inputText */
+  @IsOptional()
+  @IsString()
+  inputText?: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

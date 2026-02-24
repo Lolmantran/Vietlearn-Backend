@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { User } from '@prisma/client';
@@ -22,10 +24,32 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('auth/google')
+  googleLogin(@Body() dto: GoogleAuthDto) {
+    return this.authService.loginWithGoogle(dto.idToken);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('auth/logout')
+  logout() {
+    // JWT is stateless — the client simply discards the token.
+    // This endpoint exists so the frontend has a consistent call to make.
+    return { message: 'Logged out successfully' };
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getMe(@CurrentUser() user: User) {
     return this.authService.sanitize(user);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  updateMe(@CurrentUser() user: User, @Body() dto: UpdateMeDto) {
+    return this.authService.updateMe(user.id, dto);
   }
 }

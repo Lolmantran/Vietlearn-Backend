@@ -1,14 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
+import { XpService } from '../xp/xp.service';
 import { ChatMessage } from '../ai/interfaces/ai.interfaces';
 import { MessageRole } from '@prisma/client';
+
+const XP_PER_MESSAGE = 3;
 
 @Injectable()
 export class TutorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly xp: XpService,
   ) {}
 
   async getSessions(userId: string) {
@@ -66,7 +70,7 @@ export class TutorService {
 
     return this.prisma.tutorMessage.findMany({
       where: { sessionId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
       take: limit,
     });
   }
@@ -129,11 +133,24 @@ export class TutorService {
       data: { updatedAt: new Date() },
     });
 
+    // Award XP for sending a message
+    const xpEarned = await this.xp.addXp(userId, XP_PER_MESSAGE, 'tutor_message');
+    await this.xp.addStudyTime(userId, 1); // ~1 min per message exchange
+
     return {
       sessionId,
-      text: assistantMsg.content,
-      corrections: aiReply.corrections,
-      suggestions: aiReply.suggestions,
+      assistantMessage: {
+        id: assistantMsg.id,
+        role: assistantMsg.role,
+        content: assistantMsg.content,
+        createdAt: assistantMsg.createdAt,
+      },
+      reply: {
+        text: aiReply.text,
+        corrections: aiReply.corrections,
+        suggestions: aiReply.suggestions,
+      },
+      xpEarned,
     };
   }
 }

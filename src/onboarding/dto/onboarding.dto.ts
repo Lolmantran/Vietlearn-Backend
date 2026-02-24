@@ -1,6 +1,5 @@
 import {
   IsArray,
-  IsIn,
   IsString,
   ValidateNested,
   ArrayMinSize,
@@ -24,7 +23,8 @@ export class SubmitPlacementTestDto {
 }
 
 export class SetGoalsDto {
-  @IsIn(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'])
+  // Accept both CEFR codes (A1, A2…) and frontend display labels
+  @IsString()
   level: string;
 
   @IsArray()
