@@ -70,7 +70,7 @@ export class TutorService {
 
     return this.prisma.tutorMessage.findMany({
       where: { sessionId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
       take: limit,
     });
   }
@@ -135,6 +135,7 @@ export class TutorService {
 
     // Award XP for sending a message
     const xpEarned = await this.xp.addXp(userId, XP_PER_MESSAGE, 'tutor_message');
+    await this.xp.addStudyTime(userId, 1); // ~1 min per message exchange
 
     return {
       sessionId,

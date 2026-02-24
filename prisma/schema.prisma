@@ -17,10 +17,16 @@ model User {
   id                String    @id @default(cuid())
   email             String    @unique
   name              String
-  passwordHash      String
+  passwordHash      String?   // null for OAuth-only accounts
+  googleId          String?   @unique
+  avatarUrl         String?
   role              Role      @default(USER)
   level             String?   // A1, A2, B1, B2, C1, C2
   goals             String[]  // e.g. ["travel", "business"]
+  dailyGoal         Int?      // daily study goal in minutes (e.g. 10, 20, 30)
+  lastLoginAt             DateTime? // updated on every successful login
+  minutesStudiedToday     Int       @default(0)
+  minutesStudiedTodayDate DateTime?
   // XP & streak fields
   xpTotal           Int       @default(0)
   xpToday           Int       @default(0)
@@ -77,6 +83,7 @@ model Flashcard {
   word            String   // Vietnamese word
   pronunciation   String?  // phonetic / tones
   meaning         String   // English meaning
+  partOfSpeech    String?  // noun | verb | adjective | adverb | pronoun | phrase | expression | interjection
   exampleSentence String?
   audioUrl        String?
   createdAt       DateTime @default(now())

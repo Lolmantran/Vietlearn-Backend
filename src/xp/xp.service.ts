@@ -63,4 +63,32 @@ export class XpService {
 
     return amount;
   }
+
+  /**
+   * Increment today's study time in minutes.
+   * Resets the counter each calendar day (UTC).
+   */
+  async addStudyTime(userId: string, minutes: number): Promise<void> {
+    if (minutes <= 0) return;
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return;
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const lastDate = user.minutesStudiedTodayDate
+      ? new Date(user.minutesStudiedTodayDate)
+      : null;
+    const isNewDay = !lastDate || lastDate < today;
+    const newMinutes = isNewDay ? minutes : user.minutesStudiedToday + minutes;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        minutesStudiedToday: newMinutes,
+        minutesStudiedTodayDate: today,
+      },
+    });
+  }
 }

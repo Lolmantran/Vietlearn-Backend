@@ -16,12 +16,12 @@ export class QuizService {
   ) {}
 
   async getDailyQuiz(userId: string) {
-    // Return today's existing quiz if already generated
+    // Return today's quiz only if it hasn't been submitted yet
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
 
     const existing = await this.prisma.quizSession.findFirst({
-      where: { userId, createdAt: { gte: startOfDay } },
+      where: { userId, isComplete: false, createdAt: { gte: startOfDay } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -33,11 +33,17 @@ export class QuizService {
       return { quizId: existing.id, questions, cached: true };
     }
 
-    // Generate a new quiz for today
+    // Generate a fresh quiz
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const level = user?.level ?? 'A1';
+    const topics = user?.goals ?? ['general'];
+
+    // Random seed prevents the AI returning identical questions each call
+    const seed = Math.floor(Math.random() * 100_000);
     const questions = await this.ai.generateQuiz({
-      userLevel: user?.level ?? 'A1',
-      topics: user?.goals ?? ['general'],
+      userLevel: level,
+      topics,
+      seed,
     });
 
     const session = await this.prisma.quizSession.create({
@@ -89,6 +95,7 @@ export class QuizService {
       correct * XP_PER_CORRECT,
       'quiz_correct_answers',
     );
+    await this.xp.addStudyTime(userId, 5); // ~5 min per quiz session
 
     // Persist answers & mark complete
     await this.prisma.$transaction([

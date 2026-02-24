@@ -53,7 +53,7 @@ export class AiService {
     this.logger.debug(`generateFlashcardsFromText – text length ${params.text.length}`);
 
     const result = await this.jsonCompletion<{ flashcards: GeneratedFlashcard[] }>(
-      `You are a Vietnamese language teacher. Extract vocabulary from the provided text and return a JSON object with a "flashcards" array. Each item must have: word (string), pronunciation (string - phonetic guide for English speakers), meaning (string - English translation), exampleSentence (string - a Vietnamese sentence using the word).`,
+      `You are a Vietnamese language teacher. Extract vocabulary from the provided text and return a JSON object with a "flashcards" array. Each item must have: word (string), pronunciation (string - phonetic guide for English speakers), meaning (string - English translation), partOfSpeech (string - one of: noun, verb, adjective, adverb, pronoun, phrase, expression, interjection), exampleSentence (string - a Vietnamese sentence using the word).`,
       `Extract the most important Vietnamese vocabulary from this text:\n\n${params.text}`,
     );
 
@@ -115,8 +115,8 @@ export class AiService {
     this.logger.debug(`generateQuiz – level=${params.userLevel} topics=${params.topics.join(',')}`);
 
     const result = await this.jsonCompletion<{ questions: QuizQuestion[] }>(
-      `You are a Vietnamese language quiz generator for English-speaking learners. Return a JSON object with a "questions" array. Each question must have: id (string), type ("multiple_choice"), prompt (string - ALWAYS written in English, e.g. "What does 'xin chào' mean?"), options (array of {id: string, text: string} with 4 options using ids "a","b","c","d"), correctOptionId (string matching one option id). The answer options can contain Vietnamese words when appropriate.`,
-      `Generate 5 multiple-choice Vietnamese language quiz questions for level ${params.userLevel}, covering topics: ${params.topics.join(', ')}.`,
+      `You are a Vietnamese language quiz generator for English-speaking learners. Return a JSON object with a "questions" array. Each question must have: id (string), type ("multiple_choice"), prompt (string - ALWAYS written in English, e.g. "What does 'xin chào' mean?"), options (array of {id: string, text: string} with 4 options using ids "a","b","c","d"), correctOptionId (string matching one option id). The answer options can contain Vietnamese words when appropriate. Generate DIFFERENT questions every time — do not repeat questions from previous sessions.`,
+      `Generate 5 multiple-choice Vietnamese quiz questions for level ${params.userLevel}, covering topics: ${params.topics.join(', ')}. Variation seed: ${params.seed ?? Math.random()}.`,
     );
 
     return result.questions ?? [];

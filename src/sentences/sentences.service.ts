@@ -24,6 +24,7 @@ export class SentencesService {
     if (result.isCorrect) {
       xpEarned = await this.xp.addXp(user.id, XP_CORRECT_SENTENCE, 'sentence_correct');
     }
+    await this.xp.addStudyTime(user.id, 1); // ~1 min per sentence check
 
     return { ...result, xpEarned };
   }

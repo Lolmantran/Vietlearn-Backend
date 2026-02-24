@@ -25,6 +25,12 @@ export class VocabController {
 
   // ── Deck listing & browsing ───────────────────────────────────────────────
 
+  @Get('progress')
+  @ApiOperation({ summary: 'Decks the user has studied, with mastery progress — for dashboard card' })
+  getProgress(@CurrentUser() user: User) {
+    return this.vocabService.getProgress(user.id);
+  }
+
   @Get('decks')
   @ApiOperation({ summary: 'List all decks with user progress' })
   getDecks(@CurrentUser() user: User) {

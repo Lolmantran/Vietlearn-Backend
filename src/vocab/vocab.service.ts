@@ -8,6 +8,22 @@ import { GenerateCustomDeckDto } from './dto/generate-custom-deck.dto';
 import { DeckType } from '@prisma/client';
 
 const XP_PER_GOOD_REVIEW = 5;
+const MASTERED_INTERVAL_DAYS = 21;
+
+// Map deck names / types to icons
+function deckIcon(name: string, type: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('core') || n.includes('basic')) return '📚';
+  if (n.includes('travel')) return '✈️';
+  if (n.includes('food') || n.includes('eat') || n.includes('drink')) return '🍜';
+  if (n.includes('business') || n.includes('work')) return '💼';
+  if (n.includes('game') || n.includes('gaming')) return '🎮';
+  if (n.includes('sport')) return '⚽';
+  if (n.includes('music')) return '🎵';
+  if (n.includes('luxury')) return '💎';
+  if (type === 'CUSTOM') return '⭐';
+  return '📖';
+}
 
 @Injectable()
 export class VocabService {
@@ -17,6 +33,78 @@ export class VocabService {
     private readonly srs: SrsService,
     private readonly xp: XpService,
   ) {}
+
+  // ── GET /vocab/progress ──────────────────────────────────────────────────
+  // Returns only decks the user has studied, sorted by most recent activity.
+  // Used for the "Continue where you left off" dashboard card.
+  async getProgress(userId: string) {
+    // Fetch all reviews for this user, joining to flashcard for deckId
+    const reviews = await this.prisma.flashcardReview.findMany({
+      where: { userId },
+      select: {
+        flashcardId: true,
+        interval: true,
+        reviewedAt: true,
+        flashcard: { select: { deckId: true } },
+      },
+    });
+
+    if (reviews.length === 0) return [];
+
+    // Group by deckId
+    const deckMap = new Map<
+      string,
+      { enrolledCount: number; masteredCount: number; lastStudiedAt: Date }
+    >();
+    for (const r of reviews) {
+      const deckId = r.flashcard.deckId;
+      const existing = deckMap.get(deckId);
+      const isNew = !existing;
+      deckMap.set(deckId, {
+        enrolledCount: (existing?.enrolledCount ?? 0) + 1,
+        masteredCount:
+          (existing?.masteredCount ?? 0) +
+          (r.interval >= MASTERED_INTERVAL_DAYS ? 1 : 0),
+        lastStudiedAt: isNew
+          ? r.reviewedAt
+          : r.reviewedAt > existing!.lastStudiedAt
+          ? r.reviewedAt
+          : existing!.lastStudiedAt,
+      });
+    }
+
+    const deckIds = [...deckMap.keys()];
+    const decks = await this.prisma.deck.findMany({
+      where: { id: { in: deckIds } },
+      include: { _count: { select: { flashcards: true } } },
+    });
+
+    return decks
+      .map((d) => {
+        const stats = deckMap.get(d.id)!;
+        const totalCards = d._count.flashcards;
+        const masteredCount = stats.masteredCount;
+        const progress =
+          totalCards > 0 ? Math.round((masteredCount / totalCards) * 100) : 0;
+        return {
+          id: d.id,
+          name: d.name,
+          description: d.description,
+          deckType: d.deckType,
+          icon: deckIcon(d.name, d.deckType),
+          cardCount: totalCards,
+          enrolledCount: stats.enrolledCount,
+          masteredCount,
+          progress,
+          lastStudiedAt: stats.lastStudiedAt,
+        };
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.lastStudiedAt).getTime() -
+          new Date(a.lastStudiedAt).getTime(),
+      );
+  }
 
   // ── GET /vocab/decks ───────────────────────────────────────────────────────
   async getDecks(userId: string) {
@@ -228,6 +316,7 @@ export class VocabService {
     const xpEarned = isGoodOrEasy
       ? await this.xp.addXp(userId, XP_PER_GOOD_REVIEW, 'vocab_review')
       : 0;
+    await this.xp.addStudyTime(userId, 1); // ~1 min per card review
 
     return {
       cardId: review.flashcardId,
@@ -239,7 +328,8 @@ export class VocabService {
 
   // ── POST /vocab/generate-custom-deck ──────────────────────────────────────
   async generateCustomDeck(userId: string, dto: GenerateCustomDeckDto) {
-    const sourceText = dto.sourceText ?? (dto.words ? dto.words.join(', ') : '');
+    const sourceText =
+      dto.sourceText ?? dto.inputText ?? (dto.words ? dto.words.join(', ') : '');
     const cards = await this.ai.generateFlashcardsFromText({ text: sourceText, targetLanguage: 'vi' });
 
     return this.prisma.deck.create({
@@ -252,6 +342,7 @@ export class VocabService {
             word: c.word,
             pronunciation: c.pronunciation,
             meaning: c.meaning,
+            partOfSpeech: c.partOfSpeech ?? null,
             exampleSentence: c.exampleSentence,
           })),
         },
