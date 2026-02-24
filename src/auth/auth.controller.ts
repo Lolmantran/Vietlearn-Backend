@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -27,6 +27,16 @@ export class AuthController {
   @Post('auth/google')
   googleLogin(@Body() dto: GoogleAuthDto) {
     return this.authService.loginWithGoogle(dto.idToken);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('auth/logout')
+  logout() {
+    // JWT is stateless — the client simply discards the token.
+    // This endpoint exists so the frontend has a consistent call to make.
+    return { message: 'Logged out successfully' };
   }
 
   @ApiBearerAuth()
