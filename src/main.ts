@@ -36,6 +36,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Health check for Railway serverless
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 ViLearn API running on port ${port}`);
